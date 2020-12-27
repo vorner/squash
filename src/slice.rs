@@ -278,8 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn too_long() {
+    fn long() {
         let long = vec![0u8; 300];
-        OwnedSlice::<_>::new(&long).unwrap_err();
+        let s = OwnedSlice::<_>::new(&long).unwrap();
+        assert_eq!(long.deref(), s.deref());
     }
 }
