@@ -15,6 +15,25 @@ use crate::{BoxHeader, Header, TooLong};
 // Note that this may lead to unaligned pointer. That is OK if the pointer is never dereferenced.
 static ZERO_SENTINEL: u8 = 0;
 
+/// An owned slice.
+///
+/// This is similar to `Box<[T]>` (or `Arc<[T]>`, depending on the [`Header`] `H` type parameter).
+/// It holds a heap allocated slice of fixed length. The difference is in internal representation ‒
+/// this is behind a thin pointer and encoded with smaller memory overhead (small slices don't need
+/// full 8 bytes of length).
+///
+/// # Examples
+///
+/// ```rust
+/// use squash::OwnedSlice;
+/// let s: OwnedSlice<u16> = OwnedSlice::new(&[1, 2, 3]).unwrap();
+/// assert_eq!(3, s.len());
+/// ```
+///
+/// # Internal representation
+///
+/// The heap layout is the header, followed by exactly the number of extra bytes the header needed
+/// to encode the length, followed by the actual slice data, with alignments taken into account.
 pub struct OwnedSlice<T, H = BoxHeader>
 where
     H: Header,
@@ -80,6 +99,13 @@ where
         ptr::eq(self.header.as_ptr().cast::<u8>(), &ZERO_SENTINEL)
     }
 
+    /// Creates a new owned slice by cloning a content of the passed one.
+    ///
+    /// # Errors
+    ///
+    /// If the slice is bigger than the header can encode, this is signalized by the [`TooLong`]
+    /// error. Note that the limits of headers provided by this library are generally quite
+    /// generous and many users may opt to handle the theoretical errors by unwrapping/panicking.
     pub fn new(src: &[T]) -> Result<Self, TooLong>
     where
         T: Clone,

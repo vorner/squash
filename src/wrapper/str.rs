@@ -4,6 +4,9 @@ use std::str;
 
 use crate::{BoxHeader, Header, OwnedSlice, TooLong};
 
+/// An owned string slice.
+///
+/// This is the same optimisation as [`OwnedSlice`] does, but applied to `&str`.
 #[derive(Clone, Default)]
 pub struct Str<H: Header = BoxHeader>(OwnedSlice<u8, H>);
 
@@ -11,6 +14,8 @@ impl<H> Str<H>
 where
     H: Header,
 {
+    /// Creates a new owned string slice.
+    #[inline]
     pub fn new(s: &str) -> Result<Self, TooLong> {
         OwnedSlice::new(s.as_bytes()).map(Self)
     }
@@ -20,6 +25,7 @@ impl<H> Debug for Str<H>
 where
     H: Header,
 {
+    #[inline]
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         write!(fmt, "{:?}", self.deref())
     }
@@ -29,6 +35,7 @@ impl<H> Display for Str<H>
 where
     H: Header,
 {
+    #[inline]
     fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
         write!(fmt, "{}", self.deref())
     }
@@ -40,6 +47,7 @@ where
 {
     type Target = str;
 
+    #[inline]
     fn deref(&self) -> &str {
         // It was created from str originally
         unsafe { str::from_utf8_unchecked(&self.0) }
@@ -47,6 +55,7 @@ where
 }
 
 impl DerefMut for Str<BoxHeader> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         // It was created from str originally
         unsafe { str::from_utf8_unchecked_mut(&mut self.0) }

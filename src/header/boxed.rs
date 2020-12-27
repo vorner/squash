@@ -8,6 +8,12 @@ const INLINE_BITS: u32 = 6;
 const INLINE_MASK: u8 = 0b111111;
 const MAX_EXTRAS: usize = 4;
 
+/// A header without sharing support.
+///
+/// The data will be uniquely owned. Lengths up to 64 are encoded inline in this header. It is
+/// possible to get a mutable access to the elements of the slice.
+///
+/// This is the default [`Header`] implementation if none is set.
 pub struct BoxHeader(u8);
 
 unsafe impl Header for BoxHeader {
