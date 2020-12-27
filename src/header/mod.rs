@@ -12,7 +12,7 @@ impl Display for TooLong {
     }
 }
 
-impl Error for TooLong { }
+impl Error for TooLong {}
 
 pub unsafe trait Header {
     fn extra_needed(len: usize) -> Result<usize, TooLong>;

@@ -34,8 +34,8 @@ unsafe impl Header for BoxHeader {
 
         ptr::copy_nonoverlapping(bytes.as_ptr(), extra, extra_len);
 
-        let encoded = ((extra_len as u8 & EXTRA_MASK) << INLINE_BITS) |
-            (bytes[extra_len] & INLINE_MASK);
+        let encoded =
+            ((extra_len as u8 & EXTRA_MASK) << INLINE_BITS) | (bytes[extra_len] & INLINE_MASK);
         Self(encoded)
     }
     #[inline]

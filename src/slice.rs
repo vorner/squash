@@ -42,7 +42,10 @@ where
 
     #[inline]
     fn len_offset() -> usize {
-        Layout::new::<H>().extend(Layout::array::<u8>(0).unwrap()).unwrap().1
+        Layout::new::<H>()
+            .extend(Layout::array::<u8>(0).unwrap())
+            .unwrap()
+            .1
     }
 
     #[inline]
@@ -69,9 +72,7 @@ where
     #[inline]
     fn data(&self, len: usize) -> *mut T {
         let offset = Self::data_offset(len);
-        unsafe {
-            self.header.as_ptr().cast::<u8>().add(offset).cast::<T>()
-        }
+        unsafe { self.header.as_ptr().cast::<u8>().add(offset).cast::<T>() }
     }
 
     #[inline]
@@ -90,7 +91,10 @@ where
 
         let len = src.len();
         let (layout, len_off, data_offset) = Self::layout_and_offsets(len)?;
-        assert!(layout.size() > 0, "TODO: Handle 0 layout? Can it even happen?");
+        assert!(
+            layout.size() > 0,
+            "TODO: Handle 0 layout? Can it even happen?"
+        );
         let ptr = unsafe { alloc::alloc(layout) };
         if ptr.is_null() {
             alloc::handle_alloc_error(layout);
@@ -175,9 +179,7 @@ where
         }
 
         let len = self.len();
-        unsafe {
-            slice::from_raw_parts(self.data(len), len)
-        }
+        unsafe { slice::from_raw_parts(self.data(len), len) }
     }
 }
 
@@ -189,9 +191,7 @@ impl<T> DerefMut for OwnedSlice<T, BoxHeader> {
         }
 
         let len = self.len();
-        unsafe {
-            slice::from_raw_parts_mut(self.data(len), len)
-        }
+        unsafe { slice::from_raw_parts_mut(self.data(len), len) }
     }
 }
 
@@ -223,13 +223,15 @@ unsafe impl<T, H> Send for OwnedSlice<T, H>
 where
     H: Header + Send + Sync,
     T: Send + Sync,
-{}
+{
+}
 
 unsafe impl<T, H> Sync for OwnedSlice<T, H>
 where
     H: Header + Send + Sync,
     T: Send + Sync,
-{}
+{
+}
 
 #[cfg(test)]
 mod tests {
@@ -263,10 +265,7 @@ mod tests {
     /// Use strings so miri can check we run destructors alright.
     #[test]
     fn full() {
-        let mut s = OwnedSlice::<String>::new(&[
-            "Hello".to_owned(),
-            "World".to_owned(),
-        ]).unwrap();
+        let mut s = OwnedSlice::<String>::new(&["Hello".to_owned(), "World".to_owned()]).unwrap();
         assert_eq!(2, s.len());
         assert_eq!(s[1], "World");
         s[0] = "Round".to_owned();
