@@ -3,6 +3,7 @@ use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::panic::{self, AssertUnwindSafe};
 use std::ptr::{self, NonNull};
 use std::slice;
 
@@ -121,21 +122,36 @@ where
             layout.size() > 0,
             "TODO: Handle 0 layout? Can it even happen?"
         );
-        let ptr = unsafe { alloc::alloc(layout) };
-        if ptr.is_null() {
-            alloc::handle_alloc_error(layout);
-        }
         unsafe {
+            let ptr = alloc::alloc(layout);
+            if ptr.is_null() {
+                alloc::handle_alloc_error(layout);
+            }
+
             let data_ptr = ptr.add(data_offset).cast::<T>();
             let len_ptr = ptr.add(len_off);
             let hdr = ptr.cast::<H>();
 
             // Initialize everything
             ptr::write(hdr, H::encode_len(len, len_ptr));
-            for (idx, src) in src.iter().enumerate() {
-                // FIXME: Handle panics and release the memory/call destructors. Currently it is
-                // not UB, but we leak all the cloned things and the allocation. Not great.
-                ptr::write(data_ptr.add(idx), src.clone());
+            let mut initialized = 0;
+            let panicked = panic::catch_unwind(AssertUnwindSafe(|| {
+                for (idx, src) in src.iter().enumerate() {
+                    ptr::write(data_ptr.add(idx), src.clone());
+                    initialized = idx;
+                }
+            }));
+
+            if let Err(panic) = panicked {
+                // If we panicked in the user-provided clone (it's the only thing that can panic in
+                // here), we roll back by manually deallocating everything we already initialized
+                // and also removing the whole memory block.. and then we continue on panicking.
+                for i in 0..=initialized {
+                    ptr::drop_in_place(data_ptr.add(i));
+                }
+                alloc::dealloc(ptr, layout);
+
+                panic::resume_unwind(panic);
             }
 
             Ok(Self {
@@ -307,5 +323,36 @@ mod tests {
         let long = vec![0u8; 300];
         let s = OwnedSlice::<_>::new(&long).unwrap();
         assert_eq!(long.deref(), s.deref());
+    }
+
+    /// Check we can handle panics during partial initialization.
+    ///
+    /// Miri will catch anything we might forget to deallocate. Therefore we put strings in there
+    /// just to make sure there's some allocation in there.
+    #[test]
+    fn panic_in_init() {
+        struct MaybePanic(String);
+
+        impl Clone for MaybePanic {
+            fn clone(&self) -> Self {
+                if self.0 == "!!!" {
+                    panic!("Panicking for the good measure of it");
+                } else {
+                    Self(self.0.clone())
+                }
+            }
+        }
+
+        let input = vec![
+            MaybePanic("One".to_owned()),
+            MaybePanic("Two".to_owned()),
+            MaybePanic("!!!".to_owned()),
+            MaybePanic("Three".to_owned()),
+        ];
+
+        panic::catch_unwind(|| {
+            let _ = OwnedSlice::<MaybePanic>::new(&input);
+        })
+        .unwrap_err();
     }
 }
