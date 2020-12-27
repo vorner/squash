@@ -8,6 +8,7 @@ use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::ptr::{self, NonNull};
 use std::slice;
+use std::str;
 
 // We want to have the null pointer optimisation but we also don't want to allocate for empty
 // slices. That means we need some pointer that denotes an empty slice that we recognize and won't
@@ -282,7 +283,56 @@ where
     T: Send + Sync,
 {}
 
-// TODO: Str and other wrappers
+#[derive(Clone, Default)]
+pub struct Str<H: Header = BoxHeader>(OwnedSlice<u8, H>);
+
+impl<H> Str<H>
+where
+    H: Header,
+{
+    pub fn new(s: &str) -> Result<Self, TooLong> {
+        OwnedSlice::new(s.as_bytes()).map(Self)
+    }
+}
+
+impl<H> Debug for Str<H>
+where
+    H: Header,
+{
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        write!(fmt, "{:?}", self.deref())
+    }
+}
+
+impl<H> Display for Str<H>
+where
+    H: Header,
+{
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        write!(fmt, "{}", self.deref())
+    }
+}
+
+impl<H> Deref for Str<H>
+where
+    H: Header,
+{
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        // It was created from str originally
+        unsafe { str::from_utf8_unchecked(&self.0) }
+    }
+}
+
+impl DerefMut for Str<BoxHeader> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // It was created from str originally
+        unsafe { str::from_utf8_unchecked_mut(&mut self.0) }
+    }
+}
+
+// TODO: CStr and other wrappers
 
 #[cfg(test)]
 mod tests {
@@ -315,7 +365,7 @@ mod tests {
     ///
     /// Use strings so miri can check we run destructors alright.
     #[test]
-    fn strings() {
+    fn full() {
         let mut s = OwnedSlice::<String>::new(&[
             "Hello".to_owned(),
             "World".to_owned(),
@@ -334,5 +384,13 @@ mod tests {
     fn too_long() {
         let long = vec![0u8; 300];
         OwnedSlice::<_>::new(&long).unwrap_err();
+    }
+
+    #[test]
+    fn strings() {
+        let s: Str = Str::new("Hello").unwrap();
+        assert_eq!("Hello", s.deref());
+        assert_eq!("Hello", s.to_string());
+        assert_eq!("\"Hello\"", format!("{:?}", s));
     }
 }
