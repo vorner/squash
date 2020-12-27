@@ -35,7 +35,7 @@ pub unsafe trait Header {
     fn dec(&self) -> bool;
 }
 
-struct BoxHeader(u8);
+pub struct BoxHeader(u8);
 
 // TODO: Variable length encoding
 unsafe impl Header for BoxHeader {
@@ -66,7 +66,7 @@ unsafe impl Header for BoxHeader {
     }
 }
 
-pub struct OwnedSlice<H, T>
+pub struct OwnedSlice<T, H = BoxHeader>
 where
     H: Header,
 {
@@ -74,7 +74,7 @@ where
     _data: PhantomData<T>,
 }
 
-impl<H, T> OwnedSlice<H, T>
+impl<T, H> OwnedSlice<T, H>
 where
     H: Header,
 {
@@ -134,6 +134,11 @@ where
     where
         T: Clone,
     {
+        if src.is_empty() {
+            // Use the sentinel thing
+            return Ok(Self::default());
+        }
+
         let len = src.len();
         let (layout, len_off, data_offset) = Self::layout_and_offsets(len)?;
         assert!(layout.size() > 0, "TODO: Handle 0 layout? Can it even happen?");
@@ -164,7 +169,7 @@ where
     // TODO: Some more constructors? Something without cloning?
 }
 
-impl<H, T> Drop for OwnedSlice<H, T>
+impl<T, H> Drop for OwnedSlice<T, H>
 where
     H: Header,
 {
@@ -191,7 +196,7 @@ where
     }
 }
 
-impl<H, T> Clone for OwnedSlice<H, T>
+impl<T, H> Clone for OwnedSlice<T, H>
 where
     H: Header,
     T: Clone,
@@ -208,7 +213,7 @@ where
     }
 }
 
-impl<H, T> Deref for OwnedSlice<H, T>
+impl<T, H> Deref for OwnedSlice<T, H>
 where
     H: Header,
 {
@@ -227,7 +232,7 @@ where
     }
 }
 
-impl<T> DerefMut for OwnedSlice<BoxHeader, T> {
+impl<T> DerefMut for OwnedSlice<T, BoxHeader> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         if self.is_sentinel() {
@@ -241,18 +246,93 @@ impl<T> DerefMut for OwnedSlice<BoxHeader, T> {
     }
 }
 
+impl<T, H> Debug for OwnedSlice<T, H>
+where
+    H: Header,
+    T: Debug,
+{
+    fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+        self.deref().fmt(fmt)
+    }
+}
+
+impl<T, H> Default for OwnedSlice<T, H>
+where
+    H: Header,
+{
+    fn default() -> Self {
+        Self {
+            header: NonNull::new((&ZERO_SENTINEL as *const u8 as *mut u8).cast()).unwrap(),
+            _data: PhantomData,
+        }
+    }
+}
+
 // With some headers, we do Arc-like sharing of stuff. Therefore we need to be conservative about
 // these and require both Send + Sync as the bounds, just like Arc.
-unsafe impl<H, T> Send for OwnedSlice<H, T>
+unsafe impl<T, H> Send for OwnedSlice<T, H>
 where
     H: Header + Send + Sync,
     T: Send + Sync,
 {}
 
-unsafe impl<H, T> Sync for OwnedSlice<H, T>
+unsafe impl<T, H> Sync for OwnedSlice<T, H>
 where
     H: Header + Send + Sync,
     T: Send + Sync,
 {}
 
-// Str and other wrappers
+// TODO: Str and other wrappers
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Check we have the null-pointer optimisation.
+    #[test]
+    fn null_ptr_opt() {
+        assert_eq!(
+            mem::size_of::<OwnedSlice<String>>(),
+            mem::size_of::<Option<OwnedSlice<String>>>(),
+        );
+    }
+
+    /// Exercise the special handling of the sentinel.
+    #[test]
+    fn empty() {
+        let mut s = OwnedSlice::<String>::new(&[]).unwrap();
+        assert_eq!(s.deref(), &[] as &[String]);
+        assert_eq!(s.deref_mut(), &mut [] as &mut [String]);
+        let s2 = s.clone();
+        assert_eq!(&s as &[_], &s2 as &[_]);
+        assert_eq!("[]", format!("{:?}", s));
+
+        let s3 = OwnedSlice::<String>::default();
+        assert_eq!(&s as &[_], &s3 as &[_]);
+    }
+
+    /// Test with few strings.
+    ///
+    /// Use strings so miri can check we run destructors alright.
+    #[test]
+    fn strings() {
+        let mut s = OwnedSlice::<String>::new(&[
+            "Hello".to_owned(),
+            "World".to_owned(),
+        ]).unwrap();
+        assert_eq!(2, s.len());
+        assert_eq!(s[1], "World");
+        s[0] = "Round".to_owned();
+        assert_eq!(s[0], "Round");
+        let s2 = s.clone();
+        assert_eq!(s.deref(), s2.deref());
+        assert_eq!(2, s2.len());
+        assert_eq!("[\"Round\", \"World\"]", format!("{:?}", s2));
+    }
+
+    #[test]
+    fn too_long() {
+        let long = vec![0u8; 300];
+        OwnedSlice::<_>::new(&long).unwrap_err();
+    }
+}
