@@ -3,6 +3,13 @@ name = "squash"
 version = "0.1.0"
 authors = ["Michal 'vorner' Vaner <vorner@vorner.cz>"]
 edition = "2018"
+description = "More space efficient encoding of owned heap-allocated slices"
+documentation = "https://docs.rs/squash"
+repository = "https://github.com/vorner/squash"
+readme = "README.md"
+keywords = ["slice", "space", "string"]
+categories = ["data-structures", "memory-management", "no-std"]
+license = "Apache-2.0/MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
