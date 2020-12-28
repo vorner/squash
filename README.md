@@ -1,4 +1,4 @@
-# ArcSwap
+# Squash
 
 [![Actions Status](https://github.com/vorner/squash/workflows/test/badge.svg)](https://github.com/vorner/squash/actions)
 [![codecov](https://codecov.io/gh/vorner/squash/branch/main/graph/badge.svg?token=0SVW5CJLZQ)](https://codecov.io/gh/vorner/squash)
