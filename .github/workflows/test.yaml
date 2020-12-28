@@ -40,10 +40,30 @@ jobs:
 
       - name: Build & test
         env:
-          RUST_VERSION: ${{ matrix.rust }}
-          OS: ${{ matrix.os }}
           RUSTFLAGS: -D warnings
         run: cargo test --all-features
+
+  no-std:
+    name: Check compilation without std library
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+          profile: minimal
+
+      - name: Restore cache
+        uses: Swatinem/rust-cache@v1
+
+      - name: Build & test
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --no-default-features
 
   rustfmt:
     name: Check formatting
@@ -124,4 +144,4 @@ jobs:
         env:
           PROPTEST_CASES: "10"
           MIRIFLAGS: "-Zmiri-disable-isolation"
-        run: cargo miri test
+        run: cargo miri test --all-features

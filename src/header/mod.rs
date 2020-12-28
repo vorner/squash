@@ -1,5 +1,6 @@
+use alloc::fmt::{Display, Formatter, Result as FmtResult};
+#[cfg(feature = "std")]
 use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FmtResult};
 
 pub(crate) mod boxed;
 
@@ -21,6 +22,7 @@ impl Display for TooLong {
     }
 }
 
+#[cfg(feature = "std")]
 impl Error for TooLong {}
 
 /// Description of the header encoding a length.

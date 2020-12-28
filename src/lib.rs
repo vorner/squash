@@ -37,6 +37,12 @@
 //! Support for allocating from an arena (eg. [`bumpalo`](https://crates.io/crates/bumpalo) to cut
 //! down on the allocator overhead might also come.
 //!
+//! # Features
+//!
+//! * The `std` feature (on by default) adds some little convenience details (eg. the [`TooLong`]
+//!   implements [`std::error::Error`]). By opting out of this feature, the library needs only
+//!   [`alloc`].
+//!
 //! # Current quirks
 //!
 //! (Some of it may be lifted in future versions)
@@ -73,8 +79,10 @@
 
 #![doc(test(attr(deny(warnings))))]
 #![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-// TODO: Can we make this alloc-only?
+extern crate alloc;
+
 // TODO: ArcSwap support? Is it possible?
 // TODO: Serde support
 // TODO: HeapSize support

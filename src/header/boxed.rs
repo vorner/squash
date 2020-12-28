@@ -1,5 +1,5 @@
-use std::convert::TryInto;
-use std::ptr;
+use core::convert::TryInto;
+use core::ptr;
 
 use super::{Header, TooLong};
 
@@ -63,7 +63,7 @@ unsafe impl Header for BoxHeader {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests {
     use proptest::prelude::*;
 

@@ -1,6 +1,6 @@
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
-use std::ops::{Deref, DerefMut};
-use std::str;
+use alloc::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use core::ops::{Deref, DerefMut};
+use core::str;
 
 use crate::{BoxHeader, Header, OwnedSlice, TooLong};
 
@@ -62,7 +62,7 @@ impl DerefMut for Str<BoxHeader> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests {
     use super::*;
 

@@ -1,11 +1,11 @@
-use std::alloc::{self, Layout};
-use std::fmt::{Debug, Formatter, Result as FmtResult};
-use std::marker::PhantomData;
-use std::mem;
-use std::ops::{Deref, DerefMut};
-use std::panic::{self, AssertUnwindSafe};
-use std::ptr::{self, NonNull};
-use std::slice;
+use alloc::alloc::{alloc as mem_alloc, dealloc as mem_dealloc, handle_alloc_error, Layout};
+use alloc::fmt::{Debug, Formatter, Result as FmtResult};
+use core::cell::Cell;
+use core::marker::PhantomData;
+use core::mem;
+use core::ops::{Deref, DerefMut};
+use core::ptr::{self, NonNull};
+use core::slice;
 
 use crate::{BoxHeader, Header, TooLong};
 
@@ -123,9 +123,9 @@ where
             "TODO: Handle 0 layout? Can it even happen?"
         );
         unsafe {
-            let ptr = alloc::alloc(layout);
+            let ptr = mem_alloc(layout);
             if ptr.is_null() {
-                alloc::handle_alloc_error(layout);
+                handle_alloc_error(layout);
             }
 
             let data_ptr = ptr.add(data_offset).cast::<T>();
@@ -134,25 +134,41 @@ where
 
             // Initialize everything
             ptr::write(hdr, H::encode_len(len, len_ptr));
-            let mut initialized = 0;
-            let panicked = panic::catch_unwind(AssertUnwindSafe(|| {
-                for (idx, src) in src.iter().enumerate() {
-                    ptr::write(data_ptr.add(idx), src.clone());
-                    initialized = idx;
-                }
-            }));
+            let initialized = Cell::new(0);
 
-            if let Err(panic) = panicked {
-                // If we panicked in the user-provided clone (it's the only thing that can panic in
-                // here), we roll back by manually deallocating everything we already initialized
-                // and also removing the whole memory block.. and then we continue on panicking.
-                for i in 0..=initialized {
-                    ptr::drop_in_place(data_ptr.add(i));
-                }
-                alloc::dealloc(ptr, layout);
-
-                panic::resume_unwind(panic);
+            // Deal with possibly panicking during the initialization (clone is about the only
+            // place where it can panic).
+            struct CleanupGuard<'a, T> {
+                initialized: &'a Cell<usize>,
+                data_ptr: *mut T,
+                ptr: *mut u8,
+                layout: Layout,
             }
+            impl<T> Drop for CleanupGuard<'_, T> {
+                fn drop(&mut self) {
+                    unsafe {
+                        for i in 0..=self.initialized.get() {
+                            ptr::drop_in_place(self.data_ptr.add(i));
+                        }
+                        mem_dealloc(self.ptr, self.layout);
+                    }
+                }
+            }
+            let guard = CleanupGuard {
+                initialized: &initialized,
+                data_ptr,
+                ptr,
+                layout,
+            };
+
+            for (idx, src) in src.iter().enumerate() {
+                ptr::write(data_ptr.add(idx), src.clone());
+                initialized.set(idx);
+            }
+
+            // Confirm we are done and disarm the guard (it contains no allocation, so this doesn't
+            // leak).
+            mem::forget(guard);
 
             Ok(Self {
                 header: NonNull::new(hdr).unwrap(),
@@ -185,7 +201,7 @@ where
                     }
                 }
 
-                alloc::dealloc(self.header.as_ptr().cast::<u8>(), layout);
+                mem_dealloc(self.header.as_ptr().cast::<u8>(), layout);
             }
         }
     }
@@ -275,8 +291,10 @@ where
 {
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests {
+    use std::panic;
+
     use super::*;
 
     /// Check we have the null-pointer optimisation.
